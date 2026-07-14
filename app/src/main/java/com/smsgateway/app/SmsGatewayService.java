@@ -48,6 +48,8 @@ public class SmsGatewayService extends Service {
     private static final int NOTIF_ID = 1001;
     private static final long POLL_INTERVAL = 5000;
 
+    public static boolean isRunning = false;
+
     private OkHttpClient client;
     private ExecutorService executor;
     private Handler handler;
@@ -63,6 +65,7 @@ public class SmsGatewayService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        isRunning = true;
         client = new OkHttpClient();
         executor = Executors.newFixedThreadPool(2);
         handler = new Handler(Looper.getMainLooper());
@@ -79,6 +82,7 @@ public class SmsGatewayService extends Service {
 
     @Override
     public void onDestroy() {
+        isRunning = false;
         executor.shutdown();
         super.onDestroy();
     }
