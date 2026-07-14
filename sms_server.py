@@ -41,13 +41,6 @@ def init_db():
 
 init_db()
 
-with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "index.html")) as f:
-    HTML = f.read()
-
-@app.route("/")
-def index():
-    return render_template_string(HTML)
-
 @app.route("/api/status")
 def api_status():
     return jsonify({"status":"ok","time":now_iso()})
