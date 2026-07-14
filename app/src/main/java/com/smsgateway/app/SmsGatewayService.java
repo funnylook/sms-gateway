@@ -15,6 +15,7 @@ import android.telephony.SmsManager;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
 import android.util.Log;
+import android.widget.Toast;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
@@ -165,8 +166,15 @@ public class SmsGatewayService extends Service {
             RequestBody rb = RequestBody.create(json, MediaType.parse("application/json"));
             Request rq = new Request.Builder().url(url + "/api/sms/receive").post(rb).build();
             client.newCall(rq).enqueue(new Callback() {
-                public void onFailure(Call c, IOException e) { Log.e(TAG, "report fail", e); }
-                public void onResponse(Call c, Response r) { r.close(); Log.i(TAG, "SMS reported"); }
+                public void onFailure(Call c, IOException e) {
+                    Log.e(TAG, "report fail", e);
+                    new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(SmsGatewayService.this, "❌ 转发失败: " + e.getMessage(), Toast.LENGTH_SHORT).show());
+                }
+                public void onResponse(Call c, Response r) {
+                    r.close();
+                    Log.i(TAG, "SMS reported");
+                    new Handler(Looper.getMainLooper()).post(() -> Toast.makeText(SmsGatewayService.this, "✅ 已转发" + (slot >= 0 ? " [卡" + (slot + 1) + "]" : ""), Toast.LENGTH_SHORT).show());
+                }
             });
         } catch (Exception e) { Log.e(TAG, "reportSms err", e); }
     }
