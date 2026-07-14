@@ -6,30 +6,42 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PendingResult;
 import android.telephony.SmsMessage;
-import android.telephony.SubscriptionManager;
 import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
 import android.util.Log;
 import android.widget.Toast;
 
-import java.util.List;
+import org.json.JSONObject;
 
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
+
+import okhttp3.MediaType;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
+
+/**
+ * SMS_RECEIVED broadcast receiver (AndroidManifest registration).
+ *
+ * Design rationale:
+ *   - Context-registered receivers only work while the app process is alive. On Xiaomi /
+ *     Huawei / OPPO / Vivo / Pixel-with-battery-saver, the process gets killed
+ *     aggressively and the receiver stops receiving SMS.
+ *   - Manifest-registered receivers are discovered by Android even if the process is dead
+ *     and a fresh process is created to deliver the broadcast.
+ *   - goAsync() keeps the broadcast "in-flight" so Android does not kill the process while
+ *     the HTTP POST is on the wire.
+ */
 public class SmsReceiver extends BroadcastReceiver {
     private static final String TAG = "SmsReceiver";
-    private static SmsGatewayService instance;
 
-    @SuppressWarnings("unused")
-    public SmsReceiver() {}
-
-    public static void setService(SmsGatewayService service) {
-        instance = service;
-    }
-
-    /**
-     * 解析 SIM 卡槽位：
-     *  - intent extra "slot" / "phoneId" / "sub_id" → subscription id
-     *  - SubscriptionManager → simSlotIndex (0 或 1)
-     */
     private static int getSlot(Context context, Intent intent) {
         int subId = intent.getIntExtra("android.telephony.extra.SUBSCRIPTION_ID", -2);
         if (subId == -2) subId = intent.getIntExtra("phoneId", -1);
@@ -45,11 +57,9 @@ public class SmsReceiver extends BroadcastReceiver {
             List<SubscriptionInfo> list = sm.getActiveSubscriptionInfoList();
             if (list == null) return -1;
             for (SubscriptionInfo info : list) {
-                if (info.getSubscriptionId() == subId) {
-                    return info.getSimSlotIndex(); // 0 = 卡1, 1 = 卡2
-                }
+                if (info.getSubscriptionId() == subId) return info.getSimSlotIndex();
             }
-        } catch (Exception e) { Log.e(TAG, "getSlot err", e); }
+        } catch (Exception e) { Log.e(TAG, "getSlot", e); }
         return -1;
     }
 
@@ -69,20 +79,62 @@ public class SmsReceiver extends BroadcastReceiver {
         for (Object pdu : pdus) {
             SmsMessage smsMessage = SmsMessage.createFromPdu((byte[]) pdu, format);
             if (smsMessage != null) {
-                if (originatingAddress == null) {
-                    originatingAddress = smsMessage.getOriginatingAddress();
-                }
+                if (originatingAddress == null) originatingAddress = smsMessage.getOriginatingAddress();
                 sb.append(smsMessage.getMessageBody());
             }
         }
 
-        if (originatingAddress != null && instance != null) {
-            Log.i(TAG, "SMS from " + originatingAddress + " (卡" + (slot + 1) + ")");
-            final String addr = originatingAddress;
-            new Handler(Looper.getMainLooper()).post(() -> {
-                Toast.makeText(context, "📩 收到短信: " + addr, Toast.LENGTH_SHORT).show();
-            });
-            instance.onSmsReceived(originatingAddress, sb.toString(), slot);
+        if (originatingAddress == null) return;
+
+        final String number = originatingAddress;
+        final String body = sb.toString();
+        final int finalSlot = slot;
+
+        // Toast必须在主线程
+        new Handler(Looper.getMainLooper()).post(() ->
+            Toast.makeText(context, "📩 收到短信: " + number, Toast.LENGTH_SHORT).show());
+
+        // 用goAsync保持进程存活，做网络IO
+        final PendingResult pending = goAsync();
+        new Thread(() -> {
+            try {
+                reportDirect(context, number, body, finalSlot);
+            } finally {
+                pending.finish();
+            }
+        }).start();
+    }
+
+    private void reportDirect(Context ctx, String number, String body, int slot) {
+        try {
+            String url = Prefs.getServerUrl(ctx);
+            String phoneId = Prefs.getPhoneId(ctx);
+            String ts = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
+
+            String json = new JSONObject()
+                .put("phone_id", phoneId)
+                .put("number", number)
+                .put("body", body)
+                .put("timestamp", ts)
+                .put("type", "received")
+                .put("slot", slot >= 0 ? slot + 1 : 0)
+                .toString();
+
+            RequestBody rb = RequestBody.create(json, MediaType.parse("application/json"));
+            Request rq = new Request.Builder().url(url + "/api/sms/receive").post(rb).build();
+
+            OkHttpClient client = new OkHttpClient();
+            Response r = client.newCall(rq).execute();
+            r.close();
+            Log.i(TAG, "SMS reported: " + number);
+            new Handler(Looper.getMainLooper()).post(() ->
+                Toast.makeText(ctx, "✅ 已转发" + (slot >= 0 ? " [卡" + (slot + 1) + "]" : ""), Toast.LENGTH_SHORT).show());
+        } catch (IOException e) {
+            Log.e(TAG, "report IO", e);
+            new Handler(Looper.getMainLooper()).post(() ->
+                Toast.makeText(ctx, "❌ 转发失败: " + e.getMessage(), Toast.LENGTH_LONG).show());
+        } catch (Exception e) {
+            Log.e(TAG, "report", e);
         }
     }
 }
