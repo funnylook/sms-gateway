@@ -6,7 +6,7 @@ from flask import Flask, request, jsonify, render_template_string
 
 DB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 DB_PATH = os.path.join(DB_DIR, "sms.db")
-PORT = 8988
+PORT = 8989
 TZ = timezone(timedelta(hours=8))  # Beijing Time
 
 os.makedirs(DB_DIR, exist_ok=True)
@@ -41,8 +41,12 @@ def init_db():
 
 init_db()
 
-# Note: HTML is served by nginx directly from /usr/share/nginx/html/index.html
-# Flask only handles API routes
+with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "index.html")) as f:
+    HTML = f.read()
+
+@app.route("/")
+def index():
+    return render_template_string(HTML)
 
 @app.route("/api/status")
 def api_status():
@@ -82,6 +86,17 @@ def api_done():
             conn.commit()
     conn.close()
     return jsonify({"success":True})
+
+@app.route("/api/phone/<path:pid>", methods=["DELETE"])
+def api_phone_delete(pid):
+    conn = get_db()
+    conn.execute("DELETE FROM phones WHERE phone_id=?", (pid,))
+    conn.execute("UPDATE sms SET phone_id='unknown' WHERE phone_id=?", (pid,))
+    conn.execute("UPDATE commands SET phone_id='all' WHERE phone_id=?", (pid,))
+    conn.commit()
+    conn.close()
+    return jsonify({"success": True})
+
 
 @app.route("/api/phones")
 def api_phones():
