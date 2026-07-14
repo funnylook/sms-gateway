@@ -118,7 +118,9 @@ function smsLoad(rst){
       var tc=s.type==='sent'?' st':'';
       var tt=s.type==='sent'?'已发':'收到';
       var pl=s.phone_name||s.phone_id;
-      h+='<div class="i"><div class="ic'+tc+'">'+ic+'</div><div class="cn"><div class="n">'+esc(s.number)+' <span style="font-size:10px;color:'+clr+'">[卡'+lbl+']</span></div><div class="bd">'+esc(s.body)+'</div><div class="t">'+s.created_at+'</div></div><span class="pn">'+esc(pl)+'</span><span class="pt'+tc+'">'+tt+'</span></div>';
+      // Format: 2026-07-14T19:05:08.965782+08:00 → 2026-07-14-19:05:08
+      var dt = s.created_at.replace('T','-').substring(0,19);
+      h+='<div class="i"><div class="ic'+tc+'">'+ic+'</div><div class="cn"><div class="n">'+esc(s.number)+' <span style="font-size:10px;color:'+clr+'">[卡'+lbl+']</span></div><div class="bd">'+esc(s.body)+'</div><div class="t">'+dt+'</div></div><span class="pn">'+esc(pl)+'</span><span class="pt'+tc+'">'+tt+'</span></div>';
     }
     if(rst){document.getElementById('lst').innerHTML=h}
     else{
