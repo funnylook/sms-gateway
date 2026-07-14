@@ -61,7 +61,8 @@ public class SmsGatewayService extends Service {
         handler = new Handler(Looper.getMainLooper());
         createChannel();
 
-        smsReceiver = new SmsReceiver(this);
+        SmsReceiver.setService(this);
+        smsReceiver = new SmsReceiver();
         IntentFilter f = new IntentFilter("android.provider.Telephony.SMS_RECEIVED");
         f.setPriority(999);
         registerReceiver(smsReceiver, f);
