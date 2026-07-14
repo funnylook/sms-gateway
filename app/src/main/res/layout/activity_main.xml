@@ -68,36 +68,6 @@
             android:textSize="14sp" />
     </LinearLayout>
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:background="@drawable/card_bg"
-        android:padding="16dp"
-        android:layout_marginBottom="12dp">
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical"
-            android:gravity="center">
-            <TextView
-                android:id="@+id/tv_sms_count"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="0"
-                android:textSize="28sp"
-                android:textStyle="bold"
-                android:textColor="#667eea" />
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="已转发短信"
-                android:textSize="12sp"
-                android:textColor="#999" />
-        </LinearLayout>
-    </LinearLayout>
-
     <Button
         android:id="@+id/btn_save"
         android:layout_width="match_parent"
