@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>📱 短信网关</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f7fa;color:#333;padding:10px}
+.h{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;padding:15px;border-radius:12px;margin-bottom:15px;text-align:center}
+.h h1{font-size:18px;margin-bottom:5px}
+.h .s{font-size:12px;opacity:.8}
+.c{background:#fff;border-radius:12px;padding:15px;margin-bottom:15px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+.c h2{font-size:15px;color:#667eea;margin-bottom:12px}
+.r{display:flex;gap:8px;margin-bottom:8px}
+.r input,.r textarea,.r select{flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;outline:none}
+.r textarea{resize:vertical}
+.b{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;padding:10px 20px;border-radius:8px;font-size:14px;cursor:pointer;width:100%}
+.b:disabled{opacity:.5}
+.bl{background:#f0f0f0;color:#667eea;border:1px solid #667eea;margin-top:10px}
+.l{max-height:500px;overflow-y:auto}
+.i{padding:12px;border-bottom:1px solid #f0f0f0;display:flex;gap:10px}
+.i:last-child{border-bottom:none}
+.ic{width:36px;height:36px;background:#e8f5e9;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:18px}
+.ic.st{background:#e3f2fd}
+.cn{flex:1;min-width:0}
+.n{font-weight:600;font-size:14px}
+.bd{font-size:13px;color:#666;margin-top:3px;word-break:break-all;white-space:pre-wrap}
+.t{font-size:11px;color:#999;margin-top:4px}
+.pn{font-size:10px;padding:2px 6px;border-radius:10px;background:#4caf50;color:#fff;height:fit-content;flex-shrink:0}
+.pt{font-size:10px;padding:2px 6px;border-radius:10px;background:#667eea;color:#fff;height:fit-content;flex-shrink:0}
+.pt.st{background:#2196F3}
+.e{text-align:center;color:#999;padding:30px;font-size:13px}
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.8);color:#fff;padding:10px 20px;border-radius:8px;z-index:999;font-size:13px;display:none}
+.pl{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}
+.pg{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid #667eea;border-radius:20px;font-size:12px;cursor:pointer}
+.pg.ac{background:#667eea;color:#fff}
+.pg .d{width:6px;height:6px;background:#4caf50;border-radius:50%}
+.fb{display:flex;gap:6px;margin-bottom:10px;font-size:12px}
+.fb select{padding:4px 8px;border:1px solid #ddd;border-radius:6px}
+@media(min-width:768px){.c{max-width:600px;margin:15px auto}}
+</style>
+</head>
+<body>
+<div class="h"><h1>📱 短信网关</h1><div class="s" id="status">连接中...</div></div>
+<div class="c">
+<h2>✏️ 发送短信</h2>
+<div class="pl" id="pl"></div>
+<div class="r"><textarea id="num" placeholder="目标手机号（多个用逗号或换行分隔）" rows="2"></textarea></div>
+<div class="r"><input type="text" id="msg" placeholder="短信内容"></div>
+<div class="r"><select id="sl"><option value="0">卡1</option><option value="1">卡2</option></select></div>
+<button class="b" onclick="smsSend()" id="sb">发送</button>
+</div>
+<div class="c">
+<h2>📋 短信记录 <span style="font-size:11px;color:#999" id="sc">(0)</span></h2>
+<div class="fb">
+<select id="fp" onchange="smsFilter()"><option value="all">全部手机</option></select>
+<select id="ft" onchange="smsFilter()"><option value="all">全部</option><option value="received">收到</option><option value="sent">已发</option></select>
+</div>
+<div class="l" id="lst"><div class="e">暂无短信</div></div>
+<button class="b bl" id="lm" onclick="smsMore()" style="display:none">加载更多</button>
+</div>
+<div class="toast" id="tst"></div>
+<script>
+var SMS = {
+  pg: 1,
+  hm: false,
+  sp: 'all',
+  ids: {},  // Track loaded IDs for dedup
+  autoTimer: null
+};
+
+function esc(s){return s?s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\"/g,'&quot;'):''}
+function toast(m){var t=document.getElementById('tst');t.textContent=m;t.style.display='block';setTimeout(function(){t.style.display='none'},2000)}
+
+function smsSend(){
+  var n=document.getElementById('num').value.trim(),m=document.getElementById('msg').value.trim();
+  if(!n||!m){toast('请填写号码和内容');return}
+  var ns=n.split(/[\n,，]+/).map(function(x){return x.trim()}).filter(function(x){return x});
+  if(!ns.length){toast('请填写至少一个手机号');return}
+  for(var i=0;i<ns.length;i++){if(!/^[\d+\-() ]{5,20}$/.test(ns[i])){toast('❌ 格式错误: '+ns[i]);return}}
+  var b=document.getElementById('sb');b.disabled=true;
+  var ok=0,f=0;
+  var pid=SMS.sp==='all'?'all':SMS.sp;
+  function next(j){
+    if(j>=ns.length){
+      if(ok>0){toast('✅ 已发'+ok+'条');document.getElementById('num').value='';document.getElementById('msg').value='';SMS.pg=1;smsLoad(true)}
+      else toast('❌ 失败');
+      b.disabled=false;return;
+    }
+    fetch('/api/sms/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({number:ns[j],message:m,slot:parseInt(document.getElementById('sl').value),phone_id:pid})}).then(function(r){return r.json()}).then(function(d){if(d.success)ok++;else f++;next(j+1)}).catch(function(){f++;next(j+1)})
+  }
+  next(0);
+}
+
+function smsLoad(rst){
+  if(rst){SMS.pg=1;SMS.ids={}}
+  var fp=document.getElementById('fp').value,ft=document.getElementById('ft').value;
+  var p=new URLSearchParams({page:SMS.pg,per_page:30,phone_id:fp,type:ft});
+  fetch('/api/sms/list?'+p).then(function(r){return r.json()}).then(function(d){
+    document.getElementById('sc').textContent='('+d.total+')';
+    document.getElementById('lm').style.display=d.has_more?'block':'none';
+    SMS.hm=d.has_more;
+    if(!d.sms.length){document.getElementById('lst').innerHTML='<div class="e">暂无短信</div>';return}
+    var h='';
+    for(var i=0;i<d.sms.length;i++){
+      var s=d.sms[i];
+      // Dedup: skip if already loaded
+      if(SMS.ids[s.id]) continue;
+      SMS.ids[s.id]=true;
+      // slot: 0=unknown, 1=sim1, 2=sim2
+      var slotNum=s.slot;
+      var clr,lbl;
+      if(slotNum===1){clr='#2196f3';lbl='1'}
+      else if(slotNum===2){clr='#f44336';lbl='2'}
+      else{clr='#999';lbl='?'}
+      var ic=s.type==='sent'?'📤':'📥';
+      var tc=s.type==='sent'?' st':'';
+      var tt=s.type==='sent'?'已发':'收到';
+      var pl=s.phone_name||s.phone_id;
+      h+='<div class="i"><div class="ic'+tc+'">'+ic+'</div><div class="cn"><div class="n">'+esc(s.number)+' <span style="font-size:10px;color:'+clr+'">[卡'+lbl+']</span></div><div class="bd">'+esc(s.body)+'</div><div class="t">'+s.created_at+'</div></div><span class="pn">'+esc(pl)+'</span><span class="pt'+tc+'">'+tt+'</span></div>';
+    }
+    if(rst){document.getElementById('lst').innerHTML=h}
+    else{
+      // Auto-refresh: prepend new records (they come first since ORDER BY id DESC)
+      var lst=document.getElementById('lst');
+      lst.innerHTML=h+lst.innerHTML;
+    }
+    document.getElementById('status').textContent='✅ 已连接 · '+new Date().toLocaleTimeString();
+  }).catch(function(){if(rst)document.getElementById('status').textContent='❌ 连接失败'});
+}
+
+function smsMore(){SMS.pg++;smsLoad(false)}
+function smsFilter(){SMS.pg=1;smsLoad(true)}
+
+function loadPhones(){
+  fetch('/api/phones').then(function(r){return r.json()}).then(function(d){
+    var h='<span class="pg'+(SMS.sp==='all'?' ac':'')+'" onclick="selPhone(\'all\')">全部</span>';
+    for(var i=0;i<d.phones.length;i++){
+      var p=d.phones[i];
+      var ac=SMS.sp===p.phone_id?' ac':'';
+      h+='<span class="pg'+ac+'" onclick="selPhone(\''+p.phone_id+'\')"><span class="d"></span>'+esc(p.name||p.phone_id.substring(0,8))+'</span>';
+    }
+    document.getElementById('pl').innerHTML=h;
+    var opts='<option value="all">全部手机</option>';
+    for(var j=0;j<d.phones.length;j++){opts+='<option value="'+d.phones[j].phone_id+'">'+esc(d.phones[j].name||d.phones[j].phone_id.substring(0,8))+'</option>'}
+    document.getElementById('fp').innerHTML=opts;
+  }).catch(function(){});
+}
+
+function selPhone(id){SMS.sp=id;loadPhones();SMS.pg=1;smsLoad(true)}
+
+document.getElementById('msg').addEventListener('keypress',function(e){if(e.key==='Enter')smsSend()});
+
+// Init
+loadPhones();
+smsLoad(true);
+
+// Auto-refresh: every 5s reload page 1 (dedup handles duplicates)
+setInterval(loadPhones,10000);
+setInterval(function(){smsLoad(true)},5000);
+</script>
+</body>
+</html>
