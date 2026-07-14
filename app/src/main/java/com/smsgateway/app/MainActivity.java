@@ -25,10 +25,9 @@ public class MainActivity extends AppCompatActivity {
 
     private static final int SMS_PERMISSION_REQUEST = 100;
     private EditText etServerUrl, etPhoneId;
-    private TextView tvStatus, tvSmsCount;
+    private TextView tvStatus;
     private ExecutorService executor;
     private OkHttpClient client;
-    private int smsCount = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,7 +37,6 @@ public class MainActivity extends AppCompatActivity {
         etServerUrl = findViewById(R.id.et_server_url);
         etPhoneId = findViewById(R.id.et_phone_id);
         tvStatus = findViewById(R.id.tv_status);
-        tvSmsCount = findViewById(R.id.tv_sms_count);
         Button btnSave = findViewById(R.id.btn_save);
         Button btnStart = findViewById(R.id.btn_start);
         Button btnTest = findViewById(R.id.btn_test);
@@ -143,11 +141,6 @@ public class MainActivity extends AppCompatActivity {
 
     private void updateStatus(String status) {
         tvStatus.setText(status);
-    }
-
-    public void incrementSmsCount() {
-        smsCount++;
-        runOnUiThread(() -> tvSmsCount.setText(String.valueOf(smsCount)));
     }
 
     @Override
