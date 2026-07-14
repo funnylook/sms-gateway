@@ -82,7 +82,7 @@ def api_done():
         if cmd:
             # FIX: web sends 0-based slot, store as 1-based for display
             conn.execute("INSERT INTO sms (phone_id,number,body,timestamp,type,slot,created_at) VALUES (?,?,?,?,?,?,?)",
-                (cmd["phone_id"] if cmd["phone_id"]!="all" else "server",cmd["number"],cmd["message"],now_iso(),"sent",(cmd["slot"] or 0)+1))
+                (cmd["phone_id"] if cmd["phone_id"]!="all" else "server",cmd["number"],cmd["message"],now_iso(),"sent",(cmd["slot"] or 0)+1,now_iso()))
             conn.commit()
     conn.close()
     return jsonify({"success":True})
