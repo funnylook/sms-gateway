@@ -11,9 +11,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        # Ensure we get ALL files including fixed-debug.keystore
-        lfs: false
 
     - uses: actions/setup-java@v4
       with:
@@ -37,8 +34,9 @@ jobs:
     - name: Build APK with fixed signature
       run: |
         source "$HOME/.sdkman/bin/sdkman-init.sh"
+        cd app
         gradle assembleDebug --no-daemon \
-          -Pandroid.injected.signing.store.file=$PWD/fixed-debug.keystore \
+          -Pandroid.injected.signing.store.file=$PWD/../fixed-debug.keystore \
           -Pandroid.injected.signing.store.password=android \
           -Pandroid.injected.signing.key.alias=fixeddebug \
           -Pandroid.injected.signing.key.password=android
