@@ -45,7 +45,12 @@ public class MainActivity extends AppCompatActivity {
         executor = Executors.newCachedThreadPool();
 
         etServerUrl.setText(Prefs.getServerUrl(this));
-        etPhoneId.setText(Prefs.getPhoneId(this));
+        String savedPhoneId = Prefs.getPhoneId(this);
+        if (savedPhoneId.isEmpty() || "android_phone".equals(savedPhoneId)) {
+            savedPhoneId = "手机_" + java.util.UUID.randomUUID().toString().substring(0, 4);
+            Prefs.setPhoneId(this, savedPhoneId);
+        }
+        etPhoneId.setText(savedPhoneId);
 
         checkSmsPermissions();
 
