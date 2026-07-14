@@ -17,6 +17,7 @@ import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
 
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
@@ -106,7 +107,7 @@ public class SmsGatewayService extends Service {
         });
     }
 
-    private void poll() throws IOException {
+    private void poll() throws IOException, org.json.JSONException {
         String url = Prefs.getServerUrl(this);
         Response r = client.newCall(new Request.Builder()
                 .url(url + "/api/sms/pending").get().build()).execute();
