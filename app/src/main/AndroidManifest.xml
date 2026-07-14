@@ -33,7 +33,12 @@
         <service android:name=".SmsGatewayService" android:exported="false"
             android:foregroundServiceType="dataSync" tools:targetApi="34" />
 
-        <!-- SmsReceiver 仅在 Service 中动态注册，不在此处声明 -->
+        <!-- SMS_RECEIVED receiver：manifest 声明 + 独立线程 + goAsync 保证不被杀 -->
+        <receiver android:name=".SmsReceiver" android:exported="true">
+            <intent-filter android:priority="999">
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
 
         <receiver android:name=".BootReceiver" android:exported="true">
             <intent-filter>
