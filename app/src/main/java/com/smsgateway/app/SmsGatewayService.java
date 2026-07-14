@@ -61,8 +61,7 @@ public class SmsGatewayService extends Service {
         executor = Executors.newFixedThreadPool(2);
         handler = new Handler(Looper.getMainLooper());
         createChannel();
-        // 不再动态注册 SmsReceiver；改为 manifest 声明 + goAsync + 独立 HTTP
-        SmsReceiver.setService(this);
+        // 不再动态注册 SmsReceiver；改为 manifest 声明
         running = true;
         startPolling();
     }
