@@ -1,9 +1,12 @@
 package com.smsgateway.app;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.widget.Button;
@@ -16,8 +19,12 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -49,7 +56,13 @@ public class MainActivity extends AppCompatActivity {
         etServerUrl.setText(Prefs.getServerUrl(this));
         String savedPhoneId = Prefs.getPhoneId(this);
         if (savedPhoneId.isEmpty() || "android_phone".equals(savedPhoneId)) {
-            savedPhoneId = "手机_" + java.util.UUID.randomUUID().toString().substring(0, 4);
+            // 读取 SIM 卡手机号作为默认设备名
+            String simNumber = getSimNumber();
+            if (!simNumber.isEmpty()) {
+                savedPhoneId = simNumber;
+            } else {
+                savedPhoneId = "手机_" + java.util.UUID.randomUUID().toString().substring(0, 4);
+            }
             Prefs.setPhoneId(this, savedPhoneId);
         }
         etPhoneId.setText(savedPhoneId);
@@ -58,7 +71,6 @@ public class MainActivity extends AppCompatActivity {
 
         btnStart.setOnClickListener(v -> saveAndStart());
 
-        // Auto-save on text change
         TextWatcher watcher = new TextWatcher() {
             public void beforeTextChanged(CharSequence a, int b, int c, int d) {}
             public void onTextChanged(CharSequence a, int b, int c, int d) {}
@@ -67,7 +79,6 @@ public class MainActivity extends AppCompatActivity {
         etServerUrl.addTextChangedListener(watcher);
         etPhoneId.addTextChangedListener(watcher);
 
-        // Periodic status update
         tvStatus.postDelayed(new Runnable() {
             @Override
             public void run() {
@@ -75,6 +86,25 @@ public class MainActivity extends AppCompatActivity {
                 tvStatus.postDelayed(this, STATUS_CHECK_INTERVAL);
             }
         }, 500);
+    }
+
+    private String getSimNumber() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+            try {
+                SubscriptionManager sm = (SubscriptionManager) getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+                if (sm != null) {
+                    List<SubscriptionInfo> subs = sm.getActiveSubscriptionInfoList();
+                    if (subs != null && !subs.isEmpty()) {
+                        // 取第一张卡的手机号
+                        String num = subs.get(0).getNumber();
+                        if (num != null && !num.trim().isEmpty()) {
+                            return num.trim();
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+        return "";
     }
 
     private void savePref() {
