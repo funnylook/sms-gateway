@@ -126,6 +126,7 @@ public class MainActivity extends AppCompatActivity {
                     if (response.isSuccessful()) {
                         updateStatus("✅ 连接正常");
                         Toast.makeText(this, "连接成功", Toast.LENGTH_SHORT).show();
+                        sendTestSms();
                     } else {
                         updateStatus("❌ 连接失败: " + response.code());
                     }
@@ -137,6 +138,27 @@ public class MainActivity extends AppCompatActivity {
                 });
             }
         });
+    }
+
+    private void sendTestSms() {
+        String url = etServerUrl.getText().toString().trim();
+        String phoneId = Prefs.getPhoneId(this);
+        try {
+            String json = new org.json.JSONObject()
+                .put("phone_id", phoneId)
+                .put("number", "test")
+                .put("body", "测试成功 @" + new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(new java.util.Date()))
+                .put("timestamp", new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(new java.util.Date()))
+                .put("type", "received")
+                .put("slot", 0)
+                .toString();
+            okhttp3.RequestBody rb = okhttp3.RequestBody.create(json, okhttp3.MediaType.parse("application/json"));
+            okhttp3.Request rq = new okhttp3.Request.Builder().url(url + "/api/sms/receive").post(rb).build();
+            client.newCall(rq).enqueue(new okhttp3.Callback() {
+                public void onFailure(okhttp3.Call c, java.io.IOException e) { /* ignore */ }
+                public void onResponse(okhttp3.Call c, okhttp3.Response r) { r.close(); }
+            });
+        } catch (Exception ignored) {}
     }
 
     private void updateStatus(String status) {
