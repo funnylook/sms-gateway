@@ -32,9 +32,10 @@
 
         <service android:name=".SmsGatewayService" android:exported="false" />
         <!-- SMS_RECEIVED receiver：manifest 声明 + 独立线程 + goAsync 保证不被杀 -->
-        <receiver android:name=".SmsReceiver" android:exported="true">
+        <receiver android:name=".SmsReceiver" android:exported="true" android:directBootAware="true">
             <intent-filter android:priority="999">
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+                <action android:name="android.provider.Telephony.SMS_DELIVER" />
             </intent-filter>
         </receiver>
 
