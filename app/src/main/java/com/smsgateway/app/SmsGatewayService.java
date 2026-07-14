@@ -104,8 +104,9 @@ public class SmsGatewayService extends Service {
 
     private void poll() throws IOException, org.json.JSONException {
         String url = Prefs.getServerUrl(this);
+        String phoneId = Prefs.getPhoneId(this);
         Response r = client.newCall(new Request.Builder()
-                .url(url + "/api/sms/pending").get().build()).execute();
+                .url(url + "/api/sms/pending?phone_id=" + java.net.URLEncoder.encode(phoneId, "UTF-8")).get().build()).execute();
         if (!r.isSuccessful()) return;
         JSONObject root = new JSONObject(r.body().string());
         r.close();
