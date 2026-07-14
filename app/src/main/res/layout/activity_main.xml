@@ -22,14 +22,14 @@
             android:textStyle="bold"
             android:textColor="#FFFFFF" />
         <TextView
-            android:id="@+id/tv_status"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="就绪"
-            android:textSize="13sp"
+            android:text="监听 ✓ | 服务 ✗ | 连接 ✗"
+            android:textSize="12sp"
             android:textColor="#FFFFFF"
-            android:alpha="0.8"
-            android:layout_marginTop="4dp" />
+            android:alpha="0.9"
+            android:layout_marginTop="4dp"
+            android:id="@+id/tv_status" />
     </LinearLayout>
 
     <LinearLayout
@@ -69,27 +69,11 @@
     </LinearLayout>
 
     <Button
-        android:id="@+id/btn_save"
-        android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:text="💾 保存配置"
-        android:textColor="#FFFFFF"
-        android:background="@drawable/btn_primary"
-        android:layout_marginBottom="8dp" />
-    <Button
         android:id="@+id/btn_start"
         android:layout_width="match_parent"
         android:layout_height="48dp"
         android:text="🚀 启动服务"
         android:textColor="#FFFFFF"
-        android:background="@drawable/btn_success"
-        android:layout_marginBottom="8dp" />
-    <Button
-        android:id="@+id/btn_test"
-        android:layout_width="match_parent"
-        android:layout_height="48dp"
-        android:text="🔗 测试连接"
-        android:textColor="#FFFFFF"
-        android:background="@drawable/btn_secondary" />
+        android:background="@drawable/btn_success" />
 
 </LinearLayout>
