@@ -17,11 +17,6 @@ import android.util.Log;
 
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
-import androidx.work.ExistingPeriodicWorkPolicy;
-import androidx.work.PeriodicWorkRequest;
-import androidx.work.WorkManager;
-import androidx.work.Worker;
-import androidx.work.WorkerParameters;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -34,7 +29,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -48,7 +42,6 @@ public class SmsGatewayService extends Service {
     private static final String TAG = "SmsGateway";
     private static final String CHANNEL_ID = "sms_gateway_channel";
     private static final int NOTIF_ID = 1001;
-    private static final String WORK_NAME = "sms_poll";
 
     private OkHttpClient client;
     private ExecutorService executor;
@@ -69,7 +62,6 @@ public class SmsGatewayService extends Service {
         createChannel();
         startForeground(NOTIF_ID, buildNotification());
         startPolling();
-        scheduleWorkManager();
     }
 
     @Override
@@ -84,7 +76,11 @@ public class SmsGatewayService extends Service {
         super.onDestroy();
     }
 
-    @Nullable @Override public IBinder onBind(Intent i) { return null; }
+    @Nullable
+    @Override
+    public IBinder onBind(Intent i) {
+        return null;
+    }
 
     private Notification buildNotification() {
         return new NotificationCompat.Builder(this, CHANNEL_ID)
@@ -110,23 +106,9 @@ public class SmsGatewayService extends Service {
                     Thread.sleep(5000);
                 } catch (InterruptedException e) {
                     break;
-                } catch (Exception e) {
-                    Log.e(TAG, "poll err", e);
-                }
+                } catch (Exception e) { Log.e(TAG, "poll err", e); }
             }
         });
-    }
-
-    private void scheduleWorkManager() {
-        try {
-            PeriodicWorkRequest work = new PeriodicWorkRequest.Builder(
-                    PollWorker.class, 15, TimeUnit.MINUTES)
-                    .build();
-            WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-                    WORK_NAME, ExistingPeriodicWorkPolicy.KEEP, work);
-        } catch (Exception e) {
-            Log.e(TAG, "WorkManager err", e);
-        }
     }
 
     private void poll() throws IOException, JSONException {
@@ -143,7 +125,6 @@ public class SmsGatewayService extends Service {
         for (int i = 0; i < cmds.length(); i++) {
             JSONObject cmd = cmds.getJSONObject(i);
             int slot = cmd.optInt("slot", -1);
-            // Acquire wake lock during execution
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
             PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "SmsGateway:execute");
             wl.acquire(30000);
@@ -167,7 +148,9 @@ public class SmsGatewayService extends Service {
             RequestBody rb = RequestBody.create(json, MediaType.parse("application/json"));
             Request rq = new Request.Builder().url(url + "/api/sms/done").post(rb).build();
             client.newCall(rq).enqueue(new Callback() {
+                @Override
                 public void onFailure(Call c, IOException e) { Log.e(TAG, "report fail", e); }
+                @Override
                 public void onResponse(Call c, Response r) { r.close(); }
             });
         } catch (Exception e) { Log.e(TAG, "reportDone err", e); }
@@ -193,7 +176,9 @@ public class SmsGatewayService extends Service {
             RequestBody rb = RequestBody.create(json, MediaType.parse("application/json"));
             Request rq = new Request.Builder().url(url + "/api/sms/receive").post(rb).build();
             client.newCall(rq).enqueue(new Callback() {
+                @Override
                 public void onFailure(Call c, IOException e) { Log.e(TAG, "report fail", e); }
+                @Override
                 public void onResponse(Call c, Response r) { r.close(); Log.i(TAG, "SMS reported"); }
             });
         } catch (Exception e) { Log.e(TAG, "reportSms err", e); }
@@ -219,81 +204,5 @@ public class SmsGatewayService extends Service {
             sm.sendTextMessage(number, null, message, null, null);
             return true;
         } catch (Exception e) { Log.e(TAG, "send fail", e); return false; }
-    }
-
-    // WorkManager Worker for background polling
-    public static class PollWorker extends Worker {
-        public PollWorker(Context context, WorkerParameters params) {
-            super(context, params);
-        }
-
-        @Override
-        public Result doWork() {
-            Context ctx = getApplicationContext();
-            if (Prefs.getServerUrl(ctx).isEmpty()) return Result.success();
-
-            OkHttpClient client = new OkHttpClient();
-            try {
-                String phoneId = Prefs.getPhoneId(ctx);
-                String url = Prefs.getServerUrl(ctx);
-                Response r = client.newCall(new Request.Builder()
-                        .url(url + "/api/sms/pending?phone_id=" + java.net.URLEncoder.encode(phoneId, "UTF-8"))
-                        .get().build()).execute();
-                if (!r.isSuccessful()) return Result.success();
-                JSONObject root = new JSONObject(r.body().string());
-                r.close();
-
-                JSONArray cmds = root.getJSONArray("commands");
-                for (int i = 0; i < cmds.length(); i++) {
-                    JSONObject cmd = cmds.getJSONObject(i);
-                    int slot = cmd.optInt("slot", -1);
-                    boolean ok = sendSms(ctx, cmd.getString("number"), cmd.getString("message"), slot);
-                    reportDone(ctx, client, cmd.getInt("id"), ok);
-                }
-                return Result.success();
-            } catch (Exception e) {
-                Log.e("PollWorker", "err", e);
-                return Result.retry();
-            }
-        }
-
-        private boolean sendSms(Context ctx, String number, String message, int slot) {
-            try {
-                SmsManager sm = SmsManager.getDefault();
-                if (slot >= 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                    SubscriptionManager subManager = (SubscriptionManager) ctx.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
-                    if (subManager != null) {
-                        List<SubscriptionInfo> subs = subManager.getActiveSubscriptionInfoList();
-                        if (subs != null) {
-                            for (SubscriptionInfo info : subs) {
-                                if (info.getSimSlotIndex() == slot) {
-                                    sm = SmsManager.getSmsManagerForSubscriptionId(info.getSubscriptionId());
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-                sm.sendTextMessage(number, null, message, null, null);
-                return true;
-            } catch (Exception e) { return false; }
-        }
-
-        private void reportDone(Context ctx, OkHttpClient client, int id, boolean ok) {
-            String url = Prefs.getServerUrl(ctx);
-            try {
-                String json = new JSONObject()
-                    .put("cmd_id", id)
-                    .put("status", ok ? "success" : "failed")
-                    .put("result", ok ? "sent" : "failed")
-                    .toString();
-                RequestBody rb = RequestBody.create(json, MediaType.parse("application/json"));
-                Request rq = new Request.Builder().url(url + "/api/sms/done").post(rb).build();
-                client.newCall(rq).enqueue(new Callback() {
-                    public void onFailure(Call c, IOException e) { }
-                    public void onResponse(Call c, Response r) { r.close(); }
-                });
-            } catch (Exception e) { }
-        }
     }
 }
