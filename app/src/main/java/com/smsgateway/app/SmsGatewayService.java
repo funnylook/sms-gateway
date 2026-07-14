@@ -1,8 +1,11 @@
 package com.smsgateway.app;
 
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
@@ -10,6 +13,7 @@ import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.os.SystemClock;
 import android.telephony.SmsManager;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
@@ -42,6 +46,7 @@ public class SmsGatewayService extends Service {
     private static final String TAG = "SmsGateway";
     private static final String CHANNEL_ID = "sms_gateway_channel";
     private static final int NOTIF_ID = 1001;
+    private static final long POLL_INTERVAL = 5000;
 
     private OkHttpClient client;
     private ExecutorService executor;
@@ -49,8 +54,10 @@ public class SmsGatewayService extends Service {
 
     public static void start(Context c) {
         Intent i = new Intent(c, SmsGatewayService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) c.startForegroundService(i);
-        else c.startService(i);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            c.startForegroundService(i);
+        else
+            c.startService(i);
     }
 
     @Override
@@ -93,7 +100,8 @@ public class SmsGatewayService extends Service {
 
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel c = new NotificationChannel(CHANNEL_ID, "短信网关", NotificationManager.IMPORTANCE_LOW);
+            NotificationChannel c = new NotificationChannel(CHANNEL_ID, "短信网关",
+                    NotificationManager.IMPORTANCE_LOW);
             getSystemService(NotificationManager.class).createNotificationChannel(c);
         }
     }
@@ -103,10 +111,12 @@ public class SmsGatewayService extends Service {
             while (true) {
                 try {
                     poll();
-                    Thread.sleep(5000);
+                    Thread.sleep(POLL_INTERVAL);
                 } catch (InterruptedException e) {
                     break;
-                } catch (Exception e) { Log.e(TAG, "poll err", e); }
+                } catch (Exception e) {
+                    Log.e(TAG, "poll err", e);
+                }
             }
         });
     }
@@ -115,9 +125,11 @@ public class SmsGatewayService extends Service {
         String url = Prefs.getServerUrl(this);
         String phoneId = Prefs.getPhoneId(this);
         Response r = client.newCall(new Request.Builder()
-                .url(url + "/api/sms/pending?phone_id=" + java.net.URLEncoder.encode(phoneId, "UTF-8"))
+                .url(url + "/api/sms/pending?phone_id="
+                        + java.net.URLEncoder.encode(phoneId, "UTF-8"))
                 .get().build()).execute();
-        if (!r.isSuccessful()) return;
+        if (!r.isSuccessful())
+            return;
         JSONObject root = new JSONObject(r.body().string());
         r.close();
 
@@ -126,13 +138,15 @@ public class SmsGatewayService extends Service {
             JSONObject cmd = cmds.getJSONObject(i);
             int slot = cmd.optInt("slot", -1);
             PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
-            PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "SmsGateway:execute");
+            PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
+                    "SmsGateway:execute");
             wl.acquire(30000);
             try {
                 boolean ok = sendSms(cmd.getString("number"), cmd.getString("message"), slot);
                 reportDone(cmd.getInt("id"), ok);
             } finally {
-                if (wl.isHeld()) wl.release();
+                if (wl.isHeld())
+                    wl.release();
             }
         }
     }
@@ -140,24 +154,30 @@ public class SmsGatewayService extends Service {
     private void reportDone(int id, boolean ok) {
         String url = Prefs.getServerUrl(this);
         try {
-            String json = new JSONObject()
-                .put("cmd_id", id)
-                .put("status", ok ? "success" : "failed")
-                .put("result", ok ? "sent" : "failed")
-                .toString();
+            String json = new JSONObject().put("cmd_id", id)
+                    .put("status", ok ? "success" : "failed")
+                    .put("result", ok ? "sent" : "failed").toString();
             RequestBody rb = RequestBody.create(json, MediaType.parse("application/json"));
             Request rq = new Request.Builder().url(url + "/api/sms/done").post(rb).build();
             client.newCall(rq).enqueue(new Callback() {
                 @Override
-                public void onFailure(Call c, IOException e) { Log.e(TAG, "report fail", e); }
+                public void onFailure(Call c, IOException e) {
+                    Log.e(TAG, "report fail", e);
+                }
+
                 @Override
-                public void onResponse(Call c, Response r) { r.close(); }
+                public void onResponse(Call c, Response r) {
+                    r.close();
+                }
             });
-        } catch (Exception e) { Log.e(TAG, "reportDone err", e); }
+        } catch (Exception e) {
+            Log.e(TAG, "reportDone err", e);
+        }
     }
 
     public void onSmsReceived(String number, String body, int slot) {
-        String ts = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
+        String ts = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
+                .format(new Date());
         reportSms(number, body, ts, slot);
     }
 
@@ -165,30 +185,34 @@ public class SmsGatewayService extends Service {
         String url = Prefs.getServerUrl(this);
         String phoneId = Prefs.getPhoneId(this);
         try {
-            String json = new JSONObject()
-                .put("phone_id", phoneId)
-                .put("number", number)
-                .put("body", body)
-                .put("timestamp", ts)
-                .put("type", "received")
-                .put("slot", slot >= 0 ? slot + 1 : 0)
-                .toString();
+            String json = new JSONObject().put("phone_id", phoneId).put("number", number)
+                    .put("body", body).put("timestamp", ts).put("type", "received")
+                    .put("slot", slot >= 0 ? slot + 1 : 0).toString();
             RequestBody rb = RequestBody.create(json, MediaType.parse("application/json"));
             Request rq = new Request.Builder().url(url + "/api/sms/receive").post(rb).build();
             client.newCall(rq).enqueue(new Callback() {
                 @Override
-                public void onFailure(Call c, IOException e) { Log.e(TAG, "report fail", e); }
+                public void onFailure(Call c, IOException e) {
+                    Log.e(TAG, "report fail", e);
+                }
+
                 @Override
-                public void onResponse(Call c, Response r) { r.close(); Log.i(TAG, "SMS reported"); }
+                public void onResponse(Call c, Response r) {
+                    r.close();
+                    Log.i(TAG, "SMS reported");
+                }
             });
-        } catch (Exception e) { Log.e(TAG, "reportSms err", e); }
+        } catch (Exception e) {
+            Log.e(TAG, "reportSms err", e);
+        }
     }
 
     private boolean sendSms(String number, String message, int slot) {
         try {
             SmsManager sm = SmsManager.getDefault();
             if (slot >= 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                SubscriptionManager subManager = (SubscriptionManager) getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+                SubscriptionManager subManager = (SubscriptionManager) getSystemService(
+                        Context.TELEPHONY_SUBSCRIPTION_SERVICE);
                 if (subManager != null) {
                     List<SubscriptionInfo> subs = subManager.getActiveSubscriptionInfoList();
                     if (subs != null) {
@@ -203,6 +227,9 @@ public class SmsGatewayService extends Service {
             }
             sm.sendTextMessage(number, null, message, null, null);
             return true;
-        } catch (Exception e) { Log.e(TAG, "send fail", e); return false; }
+        } catch (Exception e) {
+            Log.e(TAG, "send fail", e);
+            return false;
+        }
     }
 }
