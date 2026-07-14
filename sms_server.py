@@ -6,7 +6,7 @@ from flask import Flask, request, jsonify, render_template_string
 
 DB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
 DB_PATH = os.path.join(DB_DIR, "sms.db")
-PORT = 8989
+PORT = 8988
 TZ = timezone(timedelta(hours=8))  # Beijing Time
 
 os.makedirs(DB_DIR, exist_ok=True)
@@ -41,12 +41,8 @@ def init_db():
 
 init_db()
 
-with open(os.path.join(os.path.dirname(os.path.abspath(__file__)), "templates", "index.html")) as f:
-    HTML = f.read()
-
-@app.route("/")
-def index():
-    return render_template_string(HTML)
+# Note: HTML is served by nginx directly from /usr/share/nginx/html/index.html
+# Flask only handles API routes
 
 @app.route("/api/status")
 def api_status():
