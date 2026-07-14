@@ -127,8 +127,12 @@ public class SmsGatewayService extends Service {
     private void reportDone(int id, boolean ok) {
         String url = Prefs.getServerUrl(this);
         try {
-            String data = "cmdId=" + id + "&status=" + (ok ? "success" : "failed");
-            RequestBody rb = RequestBody.create(data, MediaType.parse("application/x-www-form-urlencoded"));
+            String json = new JSONObject()
+                .put("cmd_id", id)
+                .put("status", ok ? "success" : "failed")
+                .put("result", "" + (ok ? "sent" : "failed"))
+                .toString();
+            RequestBody rb = RequestBody.create(json, MediaType.parse("application/json"));
             Request rq = new Request.Builder().url(url + "/api/sms/done").post(rb).build();
             client.newCall(rq).enqueue(new Callback() {
                 public void onFailure(Call c, IOException e) { Log.e(TAG, "report fail", e); }
@@ -146,12 +150,14 @@ public class SmsGatewayService extends Service {
         String url = Prefs.getServerUrl(this);
         String phoneId = Prefs.getPhoneId(this);
         try {
-            String data = "phoneId=" + URLEncoder.encode(phoneId, "UTF-8")
-                       + "&number=" + URLEncoder.encode(number, "UTF-8")
-                       + "&body=" + URLEncoder.encode(body, "UTF-8")
-                       + "&timestamp=" + URLEncoder.encode(ts, "UTF-8")
-                       + "&type=received";
-            RequestBody rb = RequestBody.create(data, MediaType.parse("application/x-www-form-urlencoded"));
+            String json = new JSONObject()
+                .put("phone_id", phoneId)
+                .put("number", number)
+                .put("body", body)
+                .put("timestamp", ts)
+                .put("type", "received")
+                .toString();
+            RequestBody rb = RequestBody.create(json, MediaType.parse("application/json"));
             Request rq = new Request.Builder().url(url + "/api/sms/receive").post(rb).build();
             client.newCall(rq).enqueue(new Callback() {
                 public void onFailure(Call c, IOException e) { Log.e(TAG, "report fail", e); }
