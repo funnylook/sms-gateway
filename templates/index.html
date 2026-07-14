@@ -36,6 +36,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .pg{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid #667eea;border-radius:20px;font-size:12px;cursor:pointer}
 .pg.ac{background:#667eea;color:#fff}
 .pg .d{width:6px;height:6px;background:#4caf50;border-radius:50%}
+.pg .x{margin-left:4px;font-size:10px;opacity:.5}
+.pg .x:hover{opacity:1;color:#f44336}
 .fb{display:flex;gap:6px;margin-bottom:10px;font-size:12px}
 .fb select{padding:4px 8px;border:1px solid #ddd;border-radius:6px}
 @media(min-width:768px){.c{max-width:600px;margin:15px auto}}
@@ -141,13 +143,21 @@ function loadPhones(){
     for(var i=0;i<d.phones.length;i++){
       var p=d.phones[i];
       var ac=SMS.sp===p.phone_id?' ac':'';
-      h+='<span class="pg'+ac+'" onclick="selPhone(\''+p.phone_id+'\')"><span class="d"></span>'+esc(p.name||p.phone_id.substring(0,8))+'</span>';
+      h+='<span class="pg'+ac+'"><span onclick="selPhone(\''+p.phone_id+'\')"><span class="d"></span>'+esc(p.name||p.phone_id.substring(0,8))+'</span><span class="x" onclick="delPhone(\''+p.phone_id+'\',this)">✕</span></span>';
     }
     document.getElementById('pl').innerHTML=h;
     var opts='<option value="all">全部手机</option>';
     for(var j=0;j<d.phones.length;j++){opts+='<option value="'+d.phones[j].phone_id+'">'+esc(d.phones[j].name||d.phones[j].phone_id.substring(0,8))+'</option>'}
     document.getElementById('fp').innerHTML=opts;
   }).catch(function(){});
+}
+
+function delPhone(id,e){
+  if(!confirm('确认删除设备 "'+id+'"?\\n相关短信记录也会被标记为 unknown')) return;
+  fetch('/api/phone/'+id,{method:'DELETE'}).then(function(r){return r.json()}).then(function(d){
+    if(d.success){loadPhones();SMS.pg=1;smsLoad(true)}
+    else toast('删除失败')
+  }).catch(function(){toast('删除失败')})
 }
 
 function selPhone(id){SMS.sp=id;loadPhones();SMS.pg=1;smsLoad(true)}
