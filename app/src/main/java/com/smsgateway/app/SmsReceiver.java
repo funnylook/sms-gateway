@@ -102,13 +102,15 @@ public class SmsReceiver extends BroadcastReceiver {
             String phoneId = Prefs.getPhoneId(ctx);
             String ts = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
 
+            // 单卡手机 slot=-1, 默认为卡1 (slot=0 → 存储为 1)
+            int fixedSlot = slot >= 0 ? slot : 0;
             String json = new org.json.JSONObject()
                 .put("phone_id", phoneId)
                 .put("number", number)
                 .put("body", body)
                 .put("timestamp", ts)
                 .put("type", "received")
-                .put("slot", slot >= 0 ? slot + 1 : 0)
+                .put("slot", fixedSlot + 1)
                 .toString();
 
             RequestBody rb = RequestBody.create(json, MediaType.parse("application/json"));
