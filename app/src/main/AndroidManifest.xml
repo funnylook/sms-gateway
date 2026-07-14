@@ -30,9 +30,7 @@
             </intent-filter>
         </activity>
 
-        <service android:name=".SmsGatewayService" android:exported="false"
-            android:foregroundServiceType="dataSync" tools:targetApi="34" />
-
+        <service android:name=".SmsGatewayService" android:exported="false" />
         <!-- SMS_RECEIVED receiver：manifest 声明 + 独立线程 + goAsync 保证不被杀 -->
         <receiver android:name=".SmsReceiver" android:exported="true">
             <intent-filter android:priority="999">
