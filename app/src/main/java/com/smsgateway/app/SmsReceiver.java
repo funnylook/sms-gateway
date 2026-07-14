@@ -4,10 +4,13 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.telephony.SmsMessage;
 import android.telephony.SubscriptionManager;
 import android.telephony.SubscriptionInfo;
 import android.util.Log;
+import android.widget.Toast;
 
 import java.util.List;
 
@@ -75,6 +78,10 @@ public class SmsReceiver extends BroadcastReceiver {
 
         if (originatingAddress != null && instance != null) {
             Log.i(TAG, "SMS from " + originatingAddress + " (卡" + (slot + 1) + ")");
+            final String addr = originatingAddress;
+            new Handler(Looper.getMainLooper()).post(() -> {
+                Toast.makeText(context, "📩 收到短信: " + addr, Toast.LENGTH_SHORT).show();
+            });
             instance.onSmsReceived(originatingAddress, sb.toString(), slot);
         }
     }
