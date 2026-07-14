@@ -9,10 +9,13 @@ import android.util.Log;
 
 public class SmsReceiver extends BroadcastReceiver {
     private static final String TAG = "SmsReceiver";
-    private final SmsGatewayService service;
+    private static SmsGatewayService instance;
 
-    public SmsReceiver(SmsGatewayService service) {
-        this.service = service;
+    @SuppressWarnings("unused")
+    public SmsReceiver() {} // 无参构造，实例化时由系统调用
+
+    public static void setService(SmsGatewayService service) {
+        instance = service;
     }
 
     @Override
@@ -37,9 +40,9 @@ public class SmsReceiver extends BroadcastReceiver {
             }
         }
 
-        if (originatingAddress != null && service != null) {
+        if (originatingAddress != null && instance != null) {
             Log.i(TAG, "SMS from " + originatingAddress);
-            service.onSmsReceived(originatingAddress, sb.toString());
+            instance.onSmsReceived(originatingAddress, sb.toString());
         }
     }
 }
