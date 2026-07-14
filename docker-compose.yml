@@ -1,8 +1,10 @@
 version: "3"
 services:
-  sms-web:
+  sms-gateway:
     build: .
-    container_name: sms-web
+    container_name: sms-gateway
     ports:
-      - "8990:80"
+      - "8989:8989"
+    volumes:
+      - ./data:/app/data
     restart: unless-stopped
