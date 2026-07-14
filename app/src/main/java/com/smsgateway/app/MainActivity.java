@@ -4,12 +4,15 @@ import android.Manifest;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 
@@ -24,6 +27,8 @@ import okhttp3.Response;
 public class MainActivity extends AppCompatActivity {
 
     private static final int SMS_PERMISSION_REQUEST = 100;
+    private static final long STATUS_CHECK_INTERVAL = 3000;
+
     private EditText etServerUrl, etPhoneId;
     private TextView tvStatus;
     private ExecutorService executor;
@@ -37,9 +42,7 @@ public class MainActivity extends AppCompatActivity {
         etServerUrl = findViewById(R.id.et_server_url);
         etPhoneId = findViewById(R.id.et_phone_id);
         tvStatus = findViewById(R.id.tv_status);
-        Button btnSave = findViewById(R.id.btn_save);
         Button btnStart = findViewById(R.id.btn_start);
-        Button btnTest = findViewById(R.id.btn_test);
 
         client = new OkHttpClient();
         executor = Executors.newCachedThreadPool();
@@ -54,11 +57,32 @@ public class MainActivity extends AppCompatActivity {
 
         checkSmsPermissions();
 
-        btnSave.setOnClickListener(v -> saveConfig());
-        btnStart.setOnClickListener(v -> startGateway());
-        btnTest.setOnClickListener(v -> testConnection());
+        btnStart.setOnClickListener(v -> saveAndStart());
 
-        updateStatus("就绪");
+        // Auto-save on text change
+        TextWatcher watcher = new TextWatcher() {
+            public void beforeTextChanged(CharSequence a, int b, int c, int d) {}
+            public void onTextChanged(CharSequence a, int b, int c, int d) {}
+            public void afterTextChanged(Editable a) { savePref(); }
+        };
+        etServerUrl.addTextChangedListener(watcher);
+        etPhoneId.addTextChangedListener(watcher);
+
+        // Periodic status update
+        tvStatus.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                updateStatus();
+                tvStatus.postDelayed(this, STATUS_CHECK_INTERVAL);
+            }
+        }, 500);
+    }
+
+    private void savePref() {
+        String url = etServerUrl.getText().toString().trim();
+        String phoneId = etPhoneId.getText().toString().trim();
+        if (!url.isEmpty()) Prefs.setServerUrl(this, url);
+        if (!phoneId.isEmpty()) Prefs.setPhoneId(this, phoneId);
     }
 
     private void checkSmsPermissions() {
@@ -69,7 +93,8 @@ public class MainActivity extends AppCompatActivity {
                     Manifest.permission.SEND_SMS,
                     Manifest.permission.INTERNET,
                     Manifest.permission.ACCESS_NETWORK_STATE,
-                    Manifest.permission.RECEIVE_BOOT_COMPLETED
+                    Manifest.permission.READ_PHONE_NUMBERS,
+                    Manifest.permission.READ_PHONE_STATE
             };
             boolean anyDenied = false;
             for (String perm : permissions) {
@@ -89,14 +114,15 @@ public class MainActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == SMS_PERMISSION_REQUEST) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "权限已授予", Toast.LENGTH_SHORT).show();
+                updateStatus();
             } else {
+                tvStatus.setText("监听 ✗ | 服务 ✗ | 连接 ✗");
                 Toast.makeText(this, "请授予短信权限", Toast.LENGTH_LONG).show();
             }
         }
     }
 
-    private void saveConfig() {
+    private void saveAndStart() {
         String url = etServerUrl.getText().toString().trim();
         String phoneId = etPhoneId.getText().toString().trim();
         if (url.isEmpty()) {
@@ -107,67 +133,35 @@ public class MainActivity extends AppCompatActivity {
         Prefs.setServerUrl(this, url);
         Prefs.setPhoneId(this, phoneId);
         SmsGatewayService.start(this);
+        updateStatus();
         Toast.makeText(this, "配置已保存", Toast.LENGTH_SHORT).show();
-        updateStatus("配置已保存，正在监听...");
     }
 
-    private void startGateway() {
-        SmsGatewayService.start(this);
-        Toast.makeText(this, "网关服务已启动", Toast.LENGTH_SHORT).show();
-        updateStatus("服务已启动");
-    }
-
-    private void testConnection() {
-        String url = etServerUrl.getText().toString().trim();
-        if (url.isEmpty()) {
-            Toast.makeText(this, "请输入服务器地址", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        updateStatus("正在测试连接...");
+    private void updateStatus() {
+        // 监听: SMS permission granted?
+        boolean hasSms = ActivityCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED;
+        // 服务: started (we check if SmsGatewayService is alive via static flag)
+        boolean isRunning = SmsGatewayService.isRunning;
+        // 连接: test server
         executor.execute(() -> {
+            boolean connected = false;
             try {
-                Response response = client.newCall(new Request.Builder().url(url + "/api/status").build()).execute();
-                runOnUiThread(() -> {
-                    if (response.isSuccessful()) {
-                        updateStatus("✅ 连接正常");
-                        Toast.makeText(this, "连接成功", Toast.LENGTH_SHORT).show();
-                        sendTestSms();
-                    } else {
-                        updateStatus("❌ 连接失败: " + response.code());
-                    }
-                });
-            } catch (IOException e) {
-                runOnUiThread(() -> {
-                    updateStatus("❌ 连接异常: " + e.getMessage());
-                    Toast.makeText(this, "异常: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                });
-            }
-        });
-    }
-
-    private void sendTestSms() {
-        String url = etServerUrl.getText().toString().trim();
-        String phoneId = Prefs.getPhoneId(this);
-        try {
-            String json = new org.json.JSONObject()
-                .put("phone_id", phoneId)
-                .put("number", "test")
-                .put("body", "测试成功 @" + new java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault()).format(new java.util.Date()))
-                .put("timestamp", new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault()).format(new java.util.Date()))
-                .put("type", "received")
-                .put("slot", 0)
-                .toString();
-            okhttp3.RequestBody rb = okhttp3.RequestBody.create(json, okhttp3.MediaType.parse("application/json"));
-            okhttp3.Request rq = new okhttp3.Request.Builder().url(url + "/api/sms/receive").post(rb).build();
-            client.newCall(rq).enqueue(new okhttp3.Callback() {
-                public void onFailure(okhttp3.Call c, java.io.IOException e) { /* ignore */ }
-                public void onResponse(okhttp3.Call c, okhttp3.Response r) { r.close(); }
+                String url = Prefs.getServerUrl(this);
+                if (!url.isEmpty()) {
+                    Response r = client.newCall(new Request.Builder().url(url + "/api/status").build()).execute();
+                    connected = r.isSuccessful();
+                    r.close();
+                }
+            } catch (IOException ignored) {}
+            final boolean conn = connected;
+            runOnUiThread(() -> {
+                String status = String.format("监听 %s | 服务 %s | 连接 %s",
+                        hasSms ? "✓" : "✗",
+                        isRunning ? "✓" : "✗",
+                        conn ? "✓" : "✗");
+                tvStatus.setText(status);
             });
-        } catch (Exception ignored) {}
-    }
-
-    private void updateStatus(String status) {
-        tvStatus.setText(status);
+        });
     }
 
     @Override
