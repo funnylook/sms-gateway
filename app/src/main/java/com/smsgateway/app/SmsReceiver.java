@@ -6,6 +6,7 @@ import android.content.Intent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.PowerManager;
 import android.telephony.SmsMessage;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
@@ -75,6 +76,12 @@ public class SmsReceiver extends BroadcastReceiver {
         final String body = sb.toString();
         final int finalSlot = slot;
 
+        // Keep CPU alive with WakeLock for background reliability
+        PowerManager pm = (PowerManager) context.getSystemService(Context.POWER_SERVICE);
+        PowerManager.WakeLock wl = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "SmsGateway:receiver");
+        wl.acquire(30000);
+
+        // Toast must be on main thread
         new Handler(Looper.getMainLooper()).post(() ->
             Toast.makeText(context, "📩 收到短信: " + number, Toast.LENGTH_SHORT).show());
 
@@ -84,6 +91,7 @@ public class SmsReceiver extends BroadcastReceiver {
                 reportDirect(context, number, body, finalSlot);
             } finally {
                 pending.finish();
+                if (wl.isHeld()) wl.release();
             }
         }).start();
     }
