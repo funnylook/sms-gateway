@@ -92,17 +92,23 @@ public class SmsGatewayService extends Service {
 
     private Notification buildNotification() {
         return new NotificationCompat.Builder(this, CHANNEL_ID)
-                .setContentTitle("短信网关")
-                .setContentText("正在监听短信…")
+                .setContentTitle("📱 短信网关")
+                .setContentText("正在监听短信...")
                 .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(Notification.CATEGORY_SERVICE)
+                .setOngoing(true)
+                .setTicker("短信网关已启动")
+                .setShowWhen(true)
                 .build();
     }
 
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel c = new NotificationChannel(CHANNEL_ID, "短信网关",
-                    NotificationManager.IMPORTANCE_LOW);
+                    NotificationManager.IMPORTANCE_HIGH);
+            c.setDescription("确保短信网关在后台不被杀死");
+            c.setShowBadge(true);
             getSystemService(NotificationManager.class).createNotificationChannel(c);
         }
     }
