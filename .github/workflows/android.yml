@@ -19,6 +19,37 @@ jobs:
 
     - uses: android-actions/setup-android@v3
 
+    - name: Setup fixed debug keystore
+      run: |
+        # Restore or create fixed keystore
+        KEYSTORE_PATH=$HOME/fixed-debug.keystore
+        echo "KEYSTORE_PATH=$KEYSTORE_PATH" >> $GITHUB_ENV
+
+        if [ -f "$KEYSTORE_PATH" ]; then
+          echo "Using existing fixed keystore"
+        else
+          echo "Generating new fixed keystore..."
+          keytool -genkey -v \
+            -keystore $KEYSTORE_PATH \
+            -storepass android \
+            -alias fixeddebug \
+            -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=Fixed Debug,OU=Dev,O=SMSGateway,L=Home,ST=CN,C=CN"
+        fi
+        
+        # Export keystore path and passwords for gradle
+        echo "KEYSTORE_PATH=$KEYSTORE_PATH" >> $GITHUB_ENV
+        echo "KEYSTORE_PASSWORD=android" >> $GITHUB_ENV
+        echo "KEY_ALIAS=fixeddebug" >> $GITHUB_ENV
+        echo "KEY_PASSWORD=android" >> $GITHUB_ENV
+
+    - name: Cache fixed keystore
+      uses: actions/cache@v4
+      with:
+        path: /home/runner/fixed-debug.keystore
+        key: fixed-debug-keystore-v1
+
     - name: Install Gradle via SDKMAN
       run: |
         curl -s "https://get.sdkman.io" | bash
@@ -29,7 +60,11 @@ jobs:
     - name: Build APK
       run: |
         source "$HOME/.sdkman/bin/sdkman-init.sh"
-        gradle assembleDebug --no-daemon
+        gradle assembleDebug --no-daemon \
+          -Pandroid.injected.signing.store.file=$KEYSTORE_PATH \
+          -Pandroid.injected.signing.store.password=$KEYSTORE_PASSWORD \
+          -Pandroid.injected.signing.key.alias=$KEY_ALIAS \
+          -Pandroid.injected.signing.key.password=$KEY_PASSWORD
 
     - uses: actions/upload-artifact@v4
       with:
