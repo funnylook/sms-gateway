@@ -217,21 +217,7 @@ public class SmsGatewayService extends Service {
     private boolean sendSms(String number, String message, int slot) {
         try {
             SmsManager sm = SmsManager.getDefault();
-            if (slot >= 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                SubscriptionManager subManager = (SubscriptionManager) getSystemService(
-                        Context.TELEPHONY_SUBSCRIPTION_SERVICE);
-                if (subManager != null) {
-                    List<SubscriptionInfo> subs = subManager.getActiveSubscriptionInfoList();
-                    if (subs != null) {
-                        for (SubscriptionInfo info : subs) {
-                            if (info.getSimSlotIndex() == slot) {
-                                sm = SmsManager.getSmsManagerForSubscriptionId(info.getSubscriptionId());
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
+            // 直接发送，不走 SubscriptionManager 避免双卡手机弹确认框
             sm.sendTextMessage(number, null, message, null, null);
             return true;
         } catch (Exception e) {
