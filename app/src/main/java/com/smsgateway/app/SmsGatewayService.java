@@ -11,6 +11,9 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
+import android.telephony.SmsManager;
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
@@ -21,9 +24,9 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.IOException;
-import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -119,7 +122,8 @@ public class SmsGatewayService extends Service {
         JSONArray cmds = root.getJSONArray("commands");
         for (int i = 0; i < cmds.length(); i++) {
             JSONObject cmd = cmds.getJSONObject(i);
-            boolean ok = sendSms(cmd.getString("number"), cmd.getString("message"));
+            int slot = cmd.optInt("slot", -1);
+            boolean ok = sendSms(cmd.getString("number"), cmd.getString("message"), slot);
             reportDone(cmd.getInt("id"), ok);
         }
     }
@@ -141,12 +145,12 @@ public class SmsGatewayService extends Service {
         } catch (Exception e) { Log.e(TAG, "reportDone err", e); }
     }
 
-    public void onSmsReceived(String number, String body) {
+    public void onSmsReceived(String number, String body, int slot) {
         String ts = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(new Date());
-        reportSms(number, body, ts);
+        reportSms(number, body, ts, slot);
     }
 
-    private void reportSms(String number, String body, String ts) {
+    private void reportSms(String number, String body, String ts, int slot) {
         String url = Prefs.getServerUrl(this);
         String phoneId = Prefs.getPhoneId(this);
         try {
@@ -156,6 +160,7 @@ public class SmsGatewayService extends Service {
                 .put("body", body)
                 .put("timestamp", ts)
                 .put("type", "received")
+                .put("slot", slot >= 0 ? slot + 1 : 0)
                 .toString();
             RequestBody rb = RequestBody.create(json, MediaType.parse("application/json"));
             Request rq = new Request.Builder().url(url + "/api/sms/receive").post(rb).build();
@@ -166,9 +171,24 @@ public class SmsGatewayService extends Service {
         } catch (Exception e) { Log.e(TAG, "reportSms err", e); }
     }
 
-    private boolean sendSms(String number, String message) {
+    private boolean sendSms(String number, String message, int slot) {
         try {
-            android.telephony.SmsManager.getDefault().sendTextMessage(number, null, message, null, null);
+            SmsManager sm = SmsManager.getDefault();
+            if (slot >= 0 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+                SubscriptionManager subManager = (SubscriptionManager) getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+                if (subManager != null) {
+                    List<SubscriptionInfo> subs = subManager.getActiveSubscriptionInfoList();
+                    if (subs != null) {
+                        for (SubscriptionInfo info : subs) {
+                            if (info.getSimSlotIndex() == slot) {
+                                sm = SmsManager.getSmsManagerForSubscriptionId(info.getSubscriptionId());
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            sm.sendTextMessage(number, null, message, null, null);
             return true;
         } catch (Exception e) { Log.e(TAG, "send fail", e); return false; }
     }
