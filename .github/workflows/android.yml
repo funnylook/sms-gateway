@@ -11,6 +11,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        # Ensure we get ALL files including fixed-debug.keystore
+        lfs: false
 
     - uses: actions/setup-java@v4
       with:
@@ -19,24 +22,10 @@ jobs:
 
     - uses: android-actions/setup-android@v3
 
-    - name: Restore fixed keystore from cache
-      uses: actions/cache@v4
-      id: keystore-cache
-      with:
-        path: /home/runner/fixed-debug.keystore
-        key: fixed-debug-keystore-v1
-
-    - name: Generate fixed keystore if not cached
-      if: steps.keystore-cache.outputs.cache-hit != 'true'
+    - name: Verify keystore exists
       run: |
-        keytool -genkey -v \
-          -keystore /home/runner/fixed-debug.keystore \
-          -storepass android \
-          -alias fixeddebug \
-          -keypass android \
-          -keyalg RSA -keysize 2048 -validity 10000 \
-          -dname "CN=Fixed Debug,OU=Dev,O=SMSGateway,L=Home,ST=CN,C=CN"
-        echo "Generated new fixed keystore"
+        ls -la fixed-debug.keystore
+        keytool -list -keystore fixed-debug.keystore -storepass android -alias fixeddebug
 
     - name: Install Gradle via SDKMAN
       run: |
@@ -49,7 +38,7 @@ jobs:
       run: |
         source "$HOME/.sdkman/bin/sdkman-init.sh"
         gradle assembleDebug --no-daemon \
-          -Pandroid.injected.signing.store.file=/home/runner/fixed-debug.keystore \
+          -Pandroid.injected.signing.store.file=$PWD/fixed-debug.keystore \
           -Pandroid.injected.signing.store.password=android \
           -Pandroid.injected.signing.key.alias=fixeddebug \
           -Pandroid.injected.signing.key.password=android
