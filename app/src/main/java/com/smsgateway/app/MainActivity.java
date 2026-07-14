@@ -137,28 +137,29 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updateStatus() {
-        // 监听: SMS permission granted?
+        if (isFinishing() || isDestroyed()) return;
         boolean hasSms = ActivityCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS) == PackageManager.PERMISSION_GRANTED;
-        // 服务: started (we check if SmsGatewayService is alive via static flag)
         boolean isRunning = SmsGatewayService.isRunning;
-        // 连接: test server
         executor.execute(() -> {
             boolean connected = false;
             try {
-                String url = Prefs.getServerUrl(this);
-                if (!url.isEmpty()) {
+                String url = Prefs.getServerUrl(MainActivity.this);
+                if (url != null && (url.startsWith("http://") || url.startsWith("https://"))) {
                     Response r = client.newCall(new Request.Builder().url(url + "/api/status").build()).execute();
                     connected = r.isSuccessful();
                     r.close();
                 }
-            } catch (IOException ignored) {}
+            } catch (Exception ignored) {}
             final boolean conn = connected;
             runOnUiThread(() -> {
-                String status = String.format("监听 %s | 服务 %s | 连接 %s",
-                        hasSms ? "✓" : "✗",
-                        isRunning ? "✓" : "✗",
-                        conn ? "✓" : "✗");
-                tvStatus.setText(status);
+                try {
+                    if (isFinishing() || isDestroyed()) return;
+                    String status = String.format("监听 %s | 服务 %s | 连接 %s",
+                            hasSms ? "✓" : "✗",
+                            isRunning ? "✓" : "✗",
+                            conn ? "✓" : "✗");
+                    if (tvStatus != null) tvStatus.setText(status);
+                } catch (Exception ignored) {}
             });
         });
     }
